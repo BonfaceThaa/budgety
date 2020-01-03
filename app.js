@@ -11,15 +11,27 @@ var budgetController = (function() {
         this.value = value;
     };
 
+    var caculateTotal = function(type){
+        var sum = 0;
+
+        data.allItems[type].forEach(function(cur){
+            sum += cur.value;
+        });
+
+        data.totals[type] = sum;
+    };
+
     var data = {
         allItems: {
             exp: [],
             inc: []
         },
-        totals:{
+        totals: {
             exp: 0,
             inc:0
-        }
+        },
+        budget: 0,
+        percentage: -1
     };
 
     return {
@@ -34,16 +46,41 @@ var budgetController = (function() {
             }
 
             // create new item
-            if (type === 'inc') {
-                newItem = new Income(ID, desc, val);
-            } else if (type === 'exp') {
+            if (type === 'exp') {
                 newItem = new Expense(ID, desc, val);
+            } else if (type === 'inc') {
+                newItem = new Income(ID, desc, val);
             }
 
             // push new item to array
             data.allItems[type].push(newItem);
 
             return newItem;
+        },
+
+        calculateBudget: function(type){
+            // 1. calculate total expenses
+            caculateTotal('inc');
+            caculateTotal('exp');
+
+            // 2. calculate budget: incomce - expense
+            data.budget = data.totals.inc - data.totals.exp;
+
+            // 3. caculate percentage of income
+            if (data.totals.inc > 0) {
+                data.percentage = Math.round((data.totals.exp / data.totals.inc) * 100);
+            } else {
+                data.percentage = -1;
+            }
+        },
+
+        getBudget: function(){
+            return {
+                budget: data.budget,
+                totalInc: data.totals.inc,
+                totalExp: data.totals.exp,
+                percentage: data.percentage
+            }
         },
 
         testing: function() {
@@ -69,7 +106,7 @@ var UIController = (function(){
             return {
                 type: document.querySelector(DOMstrings.inputType).value, // will be either inc or exp
                 description: document.querySelector(DOMstrings.inputDescription).value,
-                value: document.querySelector(DOMstrings.inputValue).value
+                value: parseFloat(document.querySelector(DOMstrings.inputValue).value)
             }
         },
 
@@ -78,7 +115,7 @@ var UIController = (function(){
 
             if (type === 'inc') {
                 element  = DOMstrings.incomeContainer;
-                html = '<div class="item clearfix" id="income-%id%"> <div class="item__description">%description%</div><div class="right clearfix"><div class="item__value">%value%</div><divclass="item__delete"> <button class="item__delete--btn"><i class="ion-ios-close-outline"></i></button></div></div></div>';
+                html = '<div class="item clearfix" id="income-%id%"><div class="item__description">%description%</div><div class="right clearfix"><div class="item__value">%value%</div><div class="item__delete"><button class="item__delete--btn"><i class="ion-ios-close-outline"></i></button></div></div></div>';
             } else if (type === 'exp'){
                 element = DOMstrings.expenseContainer;
                 html = '<div class="item clearfix" id="expense-%id%"><div class="item__description">%description%</div><div class="right clearfix"><div class="item__value">%value%</div><div class="item__percentage">21%</div><div class="item__delete"><button class="item__delete--btn"><i class="ion-ios-close-outline"></i></button></div></div></div>'
@@ -91,6 +128,20 @@ var UIController = (function(){
 
             // Replace the placeholder text with some actual data
             document.querySelector(element).insertAdjacentHTML('beforeEnd' ,newHtml)
+        },
+
+        clearFields: function(){
+            var fields, fieldsArr;
+
+            fields = document.querySelectorAll(DOMstrings.inputDescription + ', ' + DOMstrings.inputValue);
+            fieldsArr = Array.prototype.slice.call(fields);
+
+            fieldsArr.forEach(function(current, index, array) {
+                current.value = "";                
+            });
+
+            fieldsArr[0].focus();
+
         },
 
         getDOMstrings: function() {
@@ -115,6 +166,18 @@ var controller = (function(budgetCtrl, UICtrl){
         });
     };
 
+    var updateBudget = function(){
+        // 1. caclulate the budget
+        budgetCtrl.calculateBudget();
+
+        // 2. return budget
+        var budget = budgetCtrl.getBudget();
+
+        // 3. display budget on UI
+        console.log(budget);
+
+    };
+
     var ctrlAddItem = function() {
 
         var input, newItem;
@@ -122,15 +185,19 @@ var controller = (function(budgetCtrl, UICtrl){
         // 1. get field input data
         input = UICtrl.getInput();
 
-        // 2. add item to bugdet controller
-        newItem = budgetCtrl.addItem(input.type, input.description, input.value);
-        // 3. add new item to UI
+        if (input.description !== "" && !isNaN(input.value) && input.value > 0) {
+            // 2. add item to bugdet controller
+            newItem = budgetCtrl.addItem(input.type, input.description, input.value);
 
-        UICtrl.addListItem(newItem, input.type);
-        // 4. caclulate the budget
-        // 5. display budget
+            // 3. add new item to UI
+            UICtrl.addListItem(newItem, input.type);
 
-        console.log(input);
+            // 4. clear input fieldsbudget
+            UICtrl.clearFields();
+
+            // 5. calculate and update budget
+            updateBudget();
+        }
 
     }
 
